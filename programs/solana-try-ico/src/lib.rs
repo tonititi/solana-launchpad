@@ -7,9 +7,10 @@ declare_id!("GRZnyMk3yAkvcTb3HbPjKFcdEGXBDAwfudVWZZ1RfjxU");
 
 #[program]
 pub mod solana_try_ico {
-    use logics::create_pool_handle;
+    use logics::{buy_with_sol_handle, create_pool_handle};
 
     use super::*;
+    pub static MULTIPLIER: u64 = 1_000_000_000_000_u64;
 
     pub fn initialize(ctx: Context<Initialize>, treasury: Pubkey, launchpad_fee: u64) -> Result<()> {
         msg!("Greetings from: {:?}", ctx.program_id);
@@ -19,6 +20,10 @@ pub mod solana_try_ico {
     pub fn create_pool(ctx: Context<CreatePool>,  amount: u64, price_per_sol: u64, price_per_usdt: u64) -> Result<()> {
         msg!("Greetings from: {:?}", ctx.program_id);
         create_pool_handle(ctx,  amount, price_per_sol, price_per_usdt)
+    }
+    pub fn buy_with_sol(ctx: Context<BuyWithSol>, sol_amount: u64)-> Result<()> {
+        msg!("Greetings from: {:?}", ctx.program_id);
+        buy_with_sol_handle(ctx, sol_amount)
     }
 }
 
@@ -57,7 +62,6 @@ pub struct CreatePool<'info>{
         associated_token::mint = sell_token,
         associated_token::authority = pool,
         associated_token::token_program = token_program_2022,
-        
     )]
     pub pool_sell_token_ata: InterfaceAccount<'info, TokenAccount>,
     #[account(
@@ -91,7 +95,33 @@ pub struct Pool {
     pub owner: Pubkey,
     pub sell_token: Pubkey,
     pub amount: u64,
-    pub price_per_sol: u64,
-    pub price_per_usdt: u64,
+    pub price_per_sol: u64, // with MULTIPLIER
+    pub price_per_usdt: u64, // with MULTIPLIER
 }
 
+#[derive(Accounts)]
+pub struct BuyWithSol<'info> {
+    #[account(mut)]
+    pub buyer: Signer<'info>,
+    #[account(mut)]
+    pub pool: Account<'info, Pool>,
+    #[account(mut)]
+    pub pool_sell_token_ata: InterfaceAccount<'info, TokenAccount>,
+    #[account(mut)]
+    pub creator_sell_token_ata: InterfaceAccount<'info, TokenAccount>,
+    /// CHECK: read only
+    pub sell_token: InterfaceAccount<'info, Mint>,
+    #[account(
+        init_if_needed,
+        payer = buyer,
+        associated_token::mint = sell_token,
+        associated_token::authority = pool,
+        associated_token::token_program = token_program_2022,
+    )]
+    pub buyer_sell_token_ata: InterfaceAccount<'info, TokenAccount>,
+    #[account(mut)]
+    pub launchpad_config: Account<'info, LaunchpadConfig>,
+    pub token_program_2022: Interface<'info, TokenInterface>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
+    pub system_program: Program<'info, System>,
+}
